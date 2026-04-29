@@ -1,33 +1,398 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EquiLib | Project Genesis</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EquiLib – IP Lookup</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      background: #0b0d19; overflow: hidden;
+    }
+    .bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+    .orb { position: absolute; border-radius: 50%; filter: blur(90px); opacity: 0.3; animation: drift 14s ease-in-out infinite alternate; }
+    .orb1 { width: 420px; height: 420px; background: #4f3cff; top: -140px; left: -120px; }
+    .orb2 { width: 360px; height: 360px; background: #00b4d8; bottom: -100px; right: -100px; animation-delay: -5s; }
+    .orb3 { width: 260px; height: 260px; background: #ff5f9e; top: 55%; left: 48%; animation-delay: -10s; }
+    @keyframes drift { from { transform: translateY(0) scale(1); } to { transform: translateY(28px) scale(1.07); } }
+
+    .card {
+      position: relative; z-index: 1;
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.10);
+      backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+      border-radius: 28px; padding: 36px 40px 40px;
+      width: 560px; max-width: 96vw;
+      box-shadow: 0 32px 90px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10);
+    }
+
+    .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+    .logo {
+      width: 46px; height: 46px; border-radius: 14px;
+      background: linear-gradient(135deg, #4f3cff, #00b4d8);
+      display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;
+    }
+    .header-text h1 { font-size: 17px; font-weight: 700; color: #fff; }
+    .header-text p  { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+
+    .status-pill {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px; padding: 5px 12px;
+      font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.5);
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #888; transition: background 0.4s; }
+    .dot.online  { background: #22ee88; box-shadow: 0 0 8px #22ee88; }
+    .dot.offline { background: #ff5555; box-shadow: 0 0 8px #ff5555; }
+    .dot.booting { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; animation: pulse 1s ease-in-out infinite alternate; }
+    @keyframes pulse { from { opacity: 0.4; } to { opacity: 1; } }
+
+    .ip-box {
+      background: rgba(79,60,255,0.10); border: 1px solid rgba(79,60,255,0.30);
+      border-radius: 20px; padding: 20px 24px; margin-bottom: 16px;
+      text-align: center; min-height: 90px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+      transition: border-color 0.3s, background 0.3s;
+    }
+    .ip-box.up      { border-color: rgba(34,238,136,0.45); background: rgba(34,238,136,0.07); }
+    .ip-box.down    { border-color: rgba(255,85,85,0.45);  background: rgba(255,85,85,0.07); }
+    .ip-box.booting { border-color: rgba(245,158,11,0.45); background: rgba(245,158,11,0.07); }
+
+    .ip-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.35); }
+    .ip-value { font-size: 38px; font-weight: 800; color: #fff; letter-spacing: 1px; font-variant-numeric: tabular-nums; line-height: 1; }
+    .ip-value.dim { font-size: 15px; font-weight: 400; color: rgba(255,255,255,0.25); font-style: italic; }
+
+    /* Auto-open countdown bar */
+    .countdown-bar {
+      background: rgba(34,238,136,0.08); border: 1px solid rgba(34,238,136,0.2);
+      border-radius: 14px; padding: 12px 16px; margin-bottom: 16px;
+      display: none; align-items: center; gap: 12px;
+    }
+    .countdown-bar.show { display: flex; }
+    .countdown-text { font-size: 12px; font-weight: 600; color: rgba(34,238,136,0.9); flex: 1; }
+    .progress-wrap { flex: 2; background: rgba(34,238,136,0.12); border-radius: 10px; height: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #22ee88; border-radius: 10px; transition: width 1s linear; width: 100%; }
+    .cancel-btn {
+      background: none; border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.4);
+      border-radius: 8px; padding: 4px 10px; font-size: 10px; font-weight: 600; cursor: pointer;
+    }
+    .cancel-btn:hover { border-color: rgba(255,255,255,0.3); color: rgba(255,255,255,0.7); }
+
+    /* Big open button */
+    .open-btn {
+      display: block; width: 100%;
+      background: linear-gradient(135deg, #22ee88 0%, #00b4d8 100%);
+      color: #0b0d19; text-decoration: none;
+      text-align: center; font-weight: 800; font-size: 15px;
+      border-radius: 16px; padding: 16px;
+      margin-bottom: 16px;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
+      box-shadow: 0 6px 24px rgba(34,238,136,0.35);
+      pointer-events: none; opacity: 0.35;
+    }
+    .open-btn.active { pointer-events: auto; opacity: 1; }
+    .open-btn.active:hover { transform: translateY(-2px); box-shadow: 0 10px 32px rgba(34,238,136,0.5); }
+
+    /* URL + QR row */
+    .info-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; margin-bottom: 16px; align-items: start; }
+    .url-box {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px; padding: 14px 16px;
+    }
+    .url-box .ub-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: rgba(255,255,255,0.35); margin-bottom: 6px; }
+    .url-box .ub-url { font-size: 13px; font-weight: 600; color: #8fd0ff; word-break: break-all; cursor: pointer; padding: 5px 8px; border-radius: 8px; transition: background 0.15s; }
+    .url-box .ub-url:hover { background: rgba(143,208,255,0.1); }
+    .url-box .ub-hint { font-size: 10px; color: rgba(255,255,255,0.22); margin-top: 4px; }
+
+    .qr-wrap { background: #fff; border-radius: 14px; padding: 8px; display: flex; align-items: center; justify-content: center; min-width: 106px; min-height: 106px; flex-shrink: 0; }
+    #qrcode canvas, #qrcode img { border-radius: 4px; display: block; }
+    .qr-tiny-hint { text-align: center; font-size: 9px; color: rgba(255,255,255,0.2); margin-top: 5px; }
+
+    .btn-row { display: flex; gap: 10px; }
+    button {
+      flex: 1; height: 46px; border: none; border-radius: 14px;
+      font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    button:active { transform: scale(0.97); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    #refreshBtn { background: linear-gradient(135deg, #4f3cff, #00b4d8); color: #fff; box-shadow: 0 6px 22px rgba(79,60,255,0.35); }
+    #refreshBtn:hover:not(:disabled) { box-shadow: 0 8px 30px rgba(79,60,255,0.55); transform: translateY(-1px); }
+    #copyBtn { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.11); color: rgba(255,255,255,0.78); }
+    #copyBtn:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
+
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.28); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* SSL notice banner */
+    .ssl-note {
+      background: rgba(255,200,50,0.1); border: 1px solid rgba(255,200,50,0.25);
+      border-radius: 12px; padding: 10px 14px; margin-bottom: 18px;
+      font-size: 11px; color: rgba(255,200,50,0.85); line-height: 1.5;
+      display: none;
+    }
+    .ssl-note.show { display: block; }
+
+    .toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(16px); background: rgba(34,238,136,0.92); color: #fff; font-size: 12px; font-weight: 700; padding: 9px 20px; border-radius: 40px; opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; z-index: 99; white-space: nowrap; }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .timestamp { text-align: center; font-size: 10px; color: rgba(255,255,255,0.18); margin-top: 14px; }
+  </style>
 </head>
-<body class="bg-[#121212] text-slate-300 h-screen w-screen flex flex-col items-center justify-center overflow-hidden">
-    <div class="flex flex-col items-center max-w-md w-full px-6 space-y-8">
-        <div class="text-center space-y-2">
-            <h1 class="text-5xl font-extrabold tracking-tight text-white">EquiLib</h1>
-            <p class="text-sm font-semibold tracking-widest text-slate-500 uppercase">Project Genesis System Interface</p>
-        </div>
-        <div class="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-5 space-y-3">
-            <div class="flex justify-between items-center">
-                <span class="text-sm font-medium text-slate-400">Network:</span>
-                <span class="text-sm font-bold text-red-500 flex items-center gap-2"><i data-lucide="wifi-off" class="w-4 h-4"></i> OFFLINE</span>
-            </div>
-            <div class="flex justify-between items-center">
-                <span class="text-sm font-medium text-slate-400">Local Cache:</span>
-                <span class="text-sm font-bold text-emerald-400 flex items-center gap-2"><i data-lucide="database" class="w-4 h-4"></i> READY</span>
-            </div>
-        </div>
-        <a href="#" class="group w-full flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-8 rounded-lg shadow-[0_0_15px_rgba(37,99,235,0.5)] transition-all duration-300">
-            <span>ACCESS SYSTEM</span>
-            <i data-lucide="arrow-right" class="w-5 h-5 group-hover:translate-x-1 transition-transform"></i>
-        </a>
+<body>
+
+<div class="bg">
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+  <div class="orb orb3"></div>
+</div>
+
+<div class="card">
+  <div class="header">
+    <div class="logo">📦</div>
+    <div class="header-text">
+      <h1>EquiLib – Server Address</h1>
+      <p>Auto-launch · browser &amp; iPhone · port 5007</p>
     </div>
-    <script>lucide.createIcons();</script>
+    <div class="status-pill">
+      <div class="dot booting" id="dot"></div>
+      <span id="statusText">Starting…</span>
+    </div>
+  </div>
+
+  <!-- SSL tip shown once IP is found -->
+  <div class="ssl-note" id="sslNote">
+    ⚠️ <strong>First-time browser warning:</strong> Since the server uses a self-signed certificate, 
+    Chrome/Safari will show a security warning. Click <strong>"Advanced → Proceed to site"</strong> 
+    (Chrome) or <strong>"Visit Website"</strong> (iPhone Safari) to continue.
+  </div>
+
+  <div class="ip-box booting" id="ipBox">
+    <div class="ip-label">Server Local IP</div>
+    <div class="ip-value dim" id="ipValue">Waiting for server…</div>
+  </div>
+
+  <!-- Auto-open countdown -->
+  <div class="countdown-bar" id="countdownBar">
+    <span class="countdown-text" id="countdownText">Opening EquiLib in 3s…</span>
+    <div class="progress-wrap"><div class="progress-fill" id="progressFill"></div></div>
+    <button class="cancel-btn" onclick="cancelAutoOpen()">Cancel</button>
+  </div>
+
+  <!-- Manual open button -->
+  <a class="open-btn" id="openBtn" href="#" target="_blank">
+    ↗ Open EquiLib in Browser
+  </a>
+
+  <div class="info-row">
+    <div class="url-box">
+      <div class="ub-label">🌐 Full URL (click to copy)</div>
+      <div class="ub-url" id="fullUrl" onclick="copyURL()">—</div>
+      <div class="ub-hint">📱 Scan QR on the right with iPhone camera</div>
+    </div>
+    <div>
+      <div class="qr-wrap" id="qrcode">
+        <span style="color:#ccc;font-size:10px;text-align:center">QR<br>here</span>
+      </div>
+      <div class="qr-tiny-hint">iPhone scan</div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button id="refreshBtn" onclick="startChecking()">
+      <div class="spinner" id="spinner"></div>
+      <span id="btnLabel">🔄 Refresh</span>
+    </button>
+    <button id="copyBtn" onclick="copyURL()" disabled>📋 Copy URL</button>
+  </div>
+  <div class="timestamp" id="timestamp"></div>
+</div>
+
+<div class="toast" id="toast">✅ Copied!</div>
+
+<script src="local_ip.js"></script>
+<script>
+  const PORT = 5007;
+  // Server now uses https.createServer()
+  const SERVER_ORIGIN = `https://127.0.0.1:${PORT}`;
+
+  let currentIP = '';
+  let currentURL = '';
+  let checkInterval = null;
+  let autoOpenTimeout = null;
+  let autoOpenCancelled = false;
+
+  // ---- Main polling loop ----
+  function startChecking() {
+    currentIP = '';
+    currentURL = '';
+    clearInterval(checkInterval);
+    clearInterval(autoOpenTimeout);
+    setLoading(true);
+    setStatus('Checking…', 'booting');
+    document.getElementById('ipBox').className = 'ip-box booting';
+    setIPDisplay('Waiting for server…', 'dim');
+    autoOpenCancelled = false;
+
+    check(); // immediate first check
+    checkInterval = setInterval(check, 2500); // retry every 2.5s
+  }
+
+  async function check() {
+    // 1. Direct Batch Script Injection (Reliable IP injected by Start EquiLib.bat)
+    if (typeof BATCH_IP !== 'undefined' && BATCH_IP && !currentIP) {
+      onServerReady(BATCH_IP);
+      return;
+    }
+
+    // 2. Try Image Probing (usually bypasses CORS/Handshake blocks better than fetch)
+    const probe = new Image();
+    probe.onload = () => { if (!currentIP) onServerReady('127.0.0.1'); };
+    probe.onerror = () => { };
+    probe.src = `${SERVER_ORIGIN}/favicon.ico?t=${Date.now()}`;
+
+    // 3. WebRTC Fallback (in case API is unavailable)
+    const ip = await getLocalIPviaWebRTC();
+    if (ip && ip !== '127.0.0.1' && !currentIP) {
+      onServerReady(ip);
+    }
+    
+    // 4. Force reveal if stuck for 10s
+    setTimeout(() => {
+        if (!currentIP) {
+            document.getElementById('statusText').textContent = "Wait... try manually?";
+            // Fallback to localhost if all fails, removing the hardcoded 192.168.1.6
+            onServerReady('127.0.0.1'); 
+        }
+    }, 8000);
+  }
+
+  function onServerReady(ip) {
+    currentIP = ip;
+    currentURL = `https://${ip}:${PORT}`;
+
+    setIPDisplay(ip, '');
+    document.getElementById('ipBox').className = 'ip-box up';
+    setStatus('Online', 'online');
+
+    document.getElementById('fullUrl').textContent = currentURL;
+    const btn = document.getElementById('openBtn');
+    btn.href = currentURL;
+    btn.className = 'open-btn active';
+    document.getElementById('copyBtn').disabled = false;
+    document.getElementById('sslNote').className = 'ssl-note show';
+
+    generateQR(currentURL);
+    setLoading(false);
+
+    document.getElementById('timestamp').textContent =
+      `Server ready (Secure) at ${new Date().toLocaleTimeString()}`;
+
+    // Auto-open countdown
+    if (!autoOpenCancelled) {
+      startCountdown(3, currentURL);
+    }
+  }
+
+  // ---- Auto-open countdown ----
+  function startCountdown(seconds, url) {
+    const bar = document.getElementById('countdownBar');
+    const text = document.getElementById('countdownText');
+    const fill = document.getElementById('progressFill');
+    bar.className = 'countdown-bar show';
+    fill.style.width = '100%';
+
+    let remaining = seconds;
+    text.textContent = `Opening EquiLib in ${remaining}s…`;
+
+    const tick = setInterval(() => {
+      remaining--;
+      fill.style.width = `${(remaining / seconds) * 100}%`;
+      if (remaining <= 0) {
+        clearInterval(tick);
+        bar.className = 'countdown-bar';
+        if (!autoOpenCancelled) window.open(url, '_blank');
+      } else {
+        text.textContent = `Opening EquiLib in ${remaining}s…`;
+      }
+    }, 1000);
+
+    autoOpenTimeout = tick;
+  }
+
+  function cancelAutoOpen() {
+    autoOpenCancelled = true;
+    clearInterval(autoOpenTimeout);
+    document.getElementById('countdownBar').className = 'countdown-bar';
+  }
+
+  // ---- Helpers ----
+  function getLocalIPviaWebRTC() {
+    return new Promise((resolve) => {
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      const timeout = setTimeout(() => { pc.close(); resolve(null); }, 3000);
+      pc.createDataChannel('');
+      pc.createOffer().then(o => pc.setLocalDescription(o)).catch(() => { clearTimeout(timeout); resolve(null); });
+      pc.onicecandidate = (e) => {
+        if (!e || !e.candidate) return;
+        const m = /([0-9]{1,3}(?:\.[0-9]{1,3}){3})/.exec(e.candidate.candidate);
+        if (m && !m[1].startsWith('127.')) { clearTimeout(timeout); pc.close(); resolve(m[1]); }
+      };
+    });
+  }
+
+  function generateQR(url) {
+    const c = document.getElementById('qrcode');
+    c.innerHTML = '';
+    try {
+      new QRCode(c, { text: url, width: 100, height: 100, colorDark: '#0b0d19', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+    } catch(e) { c.innerHTML = `<span style="color:#aaa;font-size:10px;">N/A</span>`; }
+  }
+
+  function setIPDisplay(text, cls) {
+    const el = document.getElementById('ipValue');
+    el.textContent = text;
+    el.className = 'ip-value' + (cls ? ' ' + cls : '');
+  }
+
+  function setStatus(text, state) {
+    document.getElementById('statusText').textContent = text;
+    document.getElementById('dot').className = 'dot' + (state ? ' ' + state : '');
+  }
+
+  function setLoading(on) {
+    document.getElementById('refreshBtn').disabled = on;
+    document.getElementById('spinner').style.display = on ? 'block' : 'none';
+    document.getElementById('btnLabel').textContent = on ? 'Checking…' : '🔄 Refresh';
+  }
+
+  function copyURL() {
+    if (!currentURL || currentURL === '—') return;
+    if (navigator.clipboard) navigator.clipboard.writeText(currentURL).catch(() => legacyCopy(currentURL));
+    else legacyCopy(currentURL);
+    showToast('✅ URL copied!');
+  }
+
+  function legacyCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  // Start polling immediately on load
+  window.addEventListener('load', startChecking);
+</script>
 </body>
 </html>
