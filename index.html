@@ -245,6 +245,15 @@
   }
 
   async function check() {
+    // 0. Direct URL Parameter (Highest Priority)
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramIp = urlParams.get('ip');
+    if (paramIp && !currentIP) {
+      // Need to override SERVER_ORIGIN if we use param IP, otherwise image probing or fetching fails
+      onServerReady(paramIp);
+      return;
+    }
+
     // 1. Direct Batch Script Injection (Reliable IP injected by Start EquiLib.bat)
     if (typeof BATCH_IP !== 'undefined' && BATCH_IP && !currentIP) {
       onServerReady(BATCH_IP);
