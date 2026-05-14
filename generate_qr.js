@@ -3,7 +3,19 @@ const { createCanvas, loadImage } = require('canvas');
 const fs = require('fs');
 
 async function generateMasterQR() {
-    // ⚠️ IMPORTANT: Replace 'YOUR-GITHUB-USERNAME' with your actual GitHub username!
+    const os = require('os');
+    function getLocalIp() {
+        const interfaces = os.networkInterfaces();
+        for (const name of Object.keys(interfaces)) {
+            for (const iface of interfaces[name]) {
+                if (iface.family === 'IPv4' && !iface.internal) {
+                    return iface.address;
+                }
+            }
+        }
+        return '127.0.0.1';
+    }
+    const currentIp = getLocalIp();
     const username = 'AnDeWeen'; 
     const url = `https://${username}.github.io/EquiLib-Portal/`;
     
