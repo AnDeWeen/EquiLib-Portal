@@ -178,12 +178,7 @@
     <div class="ip-value dim" id="ipValue">Waiting for server…</div>
   </div>
 
-  <!-- Auto-open countdown -->
-  <div class="countdown-bar" id="countdownBar">
-    <span class="countdown-text" id="countdownText">Opening EquiLib in 3s…</span>
-    <div class="progress-wrap"><div class="progress-fill" id="progressFill"></div></div>
-    <button class="cancel-btn" onclick="cancelAutoOpen()">Cancel</button>
-  </div>
+  <!-- Auto-open countdown (Disabled) -->
 
   <!-- Manual open button -->
   <a class="open-btn" id="openBtn" href="#" target="_blank">
@@ -324,10 +319,7 @@
     document.getElementById('timestamp').textContent =
       `Server ready (Secure) at ${new Date().toLocaleTimeString()}`;
 
-    // Auto-open countdown
-    if (!autoOpenCancelled) {
-      startCountdown(3, currentURL);
-    }
+    // Auto-open countdown (Disabled as requested)
   }
 
   // ---- Auto-open countdown ----
