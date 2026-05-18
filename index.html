@@ -257,7 +257,7 @@
       return;
     }
 
-    // 2. Try Image Probing (delayed to give the WebRTC LAN IP sweep priority)
+    // 2. Try Image Probing (delayed to 6 seconds to give the staggered sweeps priority)
     setTimeout(() => {
       if (!currentIP) {
         const probe = new Image();
@@ -265,17 +265,27 @@
         probe.onerror = () => { };
         probe.src = `${SERVER_ORIGIN}/favicon.ico?t=${Date.now()}`;
       }
-    }, 4000);
+    }, 6000);
 
     // 3. WebRTC Fallback & Network Sweeper
     const ip = await getLocalIPviaWebRTC();
     if (ip && ip !== '127.0.0.1' && !currentIP) {
       sweepSubnet(ip);
     } else if (!currentIP) {
-      // Fallback: If WebRTC is blocked/fails, sweep the most common subnets in parallel
+      // Staggered sweeps to prevent browser network queue congestion:
+      
+      // Sweep 192.168.1.X immediately (highest probability, user's subnet)
       sweepSubnet('192.168.1.1');
-      sweepSubnet('192.168.0.1');
-      sweepSubnet('10.0.0.1');
+      
+      // Sweep 192.168.0.X after 1.5 seconds if still not found
+      setTimeout(() => {
+        if (!currentIP) sweepSubnet('192.168.0.1');
+      }, 1500);
+      
+      // Sweep 10.0.0.X after 3.0 seconds if still not found
+      setTimeout(() => {
+        if (!currentIP) sweepSubnet('10.0.0.1');
+      }, 3000);
     }
     
     // 4. Force reveal if stuck for 10s
