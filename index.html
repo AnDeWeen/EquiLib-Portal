@@ -257,15 +257,26 @@
       return;
     }
 
-    // 2. Try Image Probing (delayed to 6 seconds to give the staggered sweeps priority)
-    setTimeout(() => {
-      if (!currentIP) {
-        const probe = new Image();
-        probe.onload = () => { if (!currentIP) onServerReady('127.0.0.1'); };
-        probe.onerror = () => { };
-        probe.src = `${SERVER_ORIGIN}/favicon.ico?t=${Date.now()}`;
-      }
-    }, 6000);
+    // 2. Query the local server's IP discovery API (Fastest, most reliable LAN IP detection)
+    fetch(`${SERVER_ORIGIN}/api/ip`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.ip && !currentIP) {
+          console.log("📍 Discovered host LAN IP via local API:", data.ip);
+          onServerReady(data.ip);
+        }
+      })
+      .catch(() => {
+        // Fallback if fetch fails (e.g. SSL exception not accepted yet or offline): try image probing loopback after 6s
+        setTimeout(() => {
+          if (!currentIP) {
+            const probe = new Image();
+            probe.onload = () => { if (!currentIP) onServerReady('127.0.0.1'); };
+            probe.onerror = () => { };
+            probe.src = `${SERVER_ORIGIN}/favicon.ico?t=${Date.now()}`;
+          }
+        }, 6000);
+      });
 
     // 3. WebRTC Fallback & Network Sweeper
     const ip = await getLocalIPviaWebRTC();
