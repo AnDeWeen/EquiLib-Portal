@@ -271,6 +271,11 @@
     const ip = await getLocalIPviaWebRTC();
     if (ip && ip !== '127.0.0.1' && !currentIP) {
       sweepSubnet(ip);
+    } else if (!currentIP) {
+      // Fallback: If WebRTC is blocked/fails, sweep the most common subnets in parallel
+      sweepSubnet('192.168.1.1');
+      sweepSubnet('192.168.0.1');
+      sweepSubnet('10.0.0.1');
     }
     
     // 4. Force reveal if stuck for 10s
