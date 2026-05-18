@@ -211,7 +211,9 @@
 
 <div class="toast" id="toast">✅ Copied!</div>
 
-<script src="local_ip.js"></script>
+<script>
+  document.write('<script src="local_ip.js?t=' + Date.now() + '"><\/script>');
+</script>
 <script>
   const PORT = 5007;
   // Server now uses https.createServer()
