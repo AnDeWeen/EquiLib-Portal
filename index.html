@@ -257,11 +257,15 @@
       return;
     }
 
-    // 2. Try Image Probing (usually bypasses CORS/Handshake blocks better than fetch)
-    const probe = new Image();
-    probe.onload = () => { if (!currentIP) onServerReady('127.0.0.1'); };
-    probe.onerror = () => { };
-    probe.src = `${SERVER_ORIGIN}/favicon.ico?t=${Date.now()}`;
+    // 2. Try Image Probing (delayed to give the WebRTC LAN IP sweep priority)
+    setTimeout(() => {
+      if (!currentIP) {
+        const probe = new Image();
+        probe.onload = () => { if (!currentIP) onServerReady('127.0.0.1'); };
+        probe.onerror = () => { };
+        probe.src = `${SERVER_ORIGIN}/favicon.ico?t=${Date.now()}`;
+      }
+    }, 4000);
 
     // 3. WebRTC Fallback & Network Sweeper
     const ip = await getLocalIPviaWebRTC();
