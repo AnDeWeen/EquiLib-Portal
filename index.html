@@ -246,7 +246,6 @@
     const urlParams = new URLSearchParams(window.location.search);
     const paramIp = urlParams.get('ip');
     if (paramIp && !currentIP) {
-      // Need to override SERVER_ORIGIN if we use param IP, otherwise image probing or fetching fails
       onServerReady(paramIp);
       return;
     }
@@ -257,7 +256,7 @@
       return;
     }
 
-    // 2. Query the local server's IP discovery API (Fastest, most reliable LAN IP detection)
+    // 2. Query the local server's IP discovery API via HTTPS (succeeds if already trusted)
     fetch(`${SERVER_ORIGIN}/api/ip`)
       .then(res => res.json())
       .then(data => {
@@ -267,39 +266,38 @@
         }
       })
       .catch(() => {
-        // Fallback if fetch fails (e.g. SSL exception not accepted yet or offline): try image probing loopback after 6s
-        setTimeout(() => {
-          if (!currentIP) {
-            const probe = new Image();
-            probe.onload = () => { if (!currentIP) onServerReady('127.0.0.1'); };
-            probe.onerror = () => { };
-            probe.src = `${SERVER_ORIGIN}/favicon.ico?t=${Date.now()}`;
-          }
-        }, 6000);
+        // Fast image probe for loopback (bypasses SSL warning barrier via timing)
+        if (!currentIP) {
+          const localStart = Date.now();
+          const localProbe = new Image();
+          localProbe.onload = () => {
+            if (!currentIP) {
+              console.log("🎯 Localhost server discovered via image load.");
+              onServerReady('127.0.0.1');
+            }
+          };
+          localProbe.onerror = () => {
+            const duration = Date.now() - localStart;
+            // SSL handshake rejection fires onerror instantly (<250ms)
+            if (duration < 250 && !currentIP) {
+              console.log(`⚡ Localhost active server detected in ${duration}ms (potential SSL block).`);
+              onServerReady('127.0.0.1');
+            }
+          };
+          localProbe.src = `${SERVER_ORIGIN}/favicon.ico?t=${Date.now()}`;
+        }
       });
 
-    // 3. WebRTC Fallback & Network Sweeper
+    // 3. WebRTC Subnet Extraction & Targeted Network Sweeper
     const ip = await getLocalIPviaWebRTC();
     if (ip && ip !== '127.0.0.1' && !currentIP) {
       sweepSubnet(ip);
     } else if (!currentIP) {
-      // Staggered sweeps to prevent browser network queue congestion:
-      
-      // Sweep 192.168.1.X immediately (highest probability, user's subnet)
+      // Fallback: Sweep 192.168.1.X range immediately (user's target subnet)
       sweepSubnet('192.168.1.1');
-      
-      // Sweep 192.168.0.X after 1.5 seconds if still not found
-      setTimeout(() => {
-        if (!currentIP) sweepSubnet('192.168.0.1');
-      }, 1500);
-      
-      // Sweep 10.0.0.X after 3.0 seconds if still not found
-      setTimeout(() => {
-        if (!currentIP) sweepSubnet('10.0.0.1');
-      }, 3000);
     }
     
-    // 4. Force reveal if stuck for 10s
+    // 4. Force reveal if stuck for 8s
     setTimeout(() => {
         if (!currentIP) {
             document.getElementById('statusText').textContent = "Wait... try manually?";
@@ -317,15 +315,27 @@
     setStatus('Scanning network...', 'booting');
     setIPDisplay('Scanning...', 'dim');
     
-    // Sweep all 254 IPs
+    // Sweep all 254 IPs on port 5007
     for (let i = 1; i <= 254; i++) {
         if (currentIP) break;
         const testIp = `${base}.${i}`;
+        const startTime = Date.now();
         const img = new Image();
         img.onload = () => {
-            if (!currentIP) onServerReady(testIp);
+            if (!currentIP) {
+                console.log(`🎯 Server found via image load on ${testIp}`);
+                onServerReady(testIp);
+            }
         };
-        // Use a short timeout to prevent browser hanging on 254 dead requests
+        img.onerror = () => {
+            const duration = Date.now() - startTime;
+            // If the error fires extremely fast (e.g. < 250ms), the server is active
+            // and immediately rejected the untrusted self-signed certificate.
+            if (duration < 250 && !currentIP) {
+                console.log(`⚡ Fast SSL error response on ${testIp} in ${duration}ms. Locking on!`);
+                onServerReady(testIp);
+            }
+        };
         img.src = `https://${testIp}:${PORT}/favicon.ico?t=${Date.now()}`;
     }
   }
