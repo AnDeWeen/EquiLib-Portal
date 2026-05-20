@@ -178,7 +178,24 @@
     <div class="ip-value dim" id="ipValue">Waiting for server…</div>
   </div>
 
-  <!-- Auto-open countdown (Disabled) -->
+  <!-- Gorgeous Manual IP Entry Form -->
+  <div class="manual-box" id="manualBox" style="display: none; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; padding: 20px; margin-bottom: 16px; margin-top: 16px; transition: all 0.3s ease;">
+    <div style="font-size: 11px; font-weight: 700; color: rgba(255, 255, 255, 0.4); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+      <span>📱 Manual Connection Fallback</span>
+    </div>
+    <div style="font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-bottom: 14px; line-height: 1.4;">
+      Could not automatically locate the server. Enter the IP address shown on your PC dashboard to connect:
+    </div>
+    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+      <input type="text" id="manualIpInput" placeholder="e.g. 192.168.1.23" style="flex: 1; height: 42px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; padding: 0 14px; color: #fff; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='rgba(79,60,255,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
+      <button id="manualConnectBtn" onclick="connectManually()" style="width: 100px; height: 42px; background: linear-gradient(135deg, #4f3cff, #00b4d8); color: #fff; font-size: 13px; font-weight: 600; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 12px rgba(79,60,255,0.25);">Connect</button>
+    </div>
+    <!-- Suggestions list -->
+    <div id="recentIpsBox" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
+      <span style="font-size: 11px; color: rgba(255,255,255,0.3);">Suggested:</span>
+      <div id="recentIpsList" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+    </div>
+  </div>
 
   <!-- Manual open button -->
   <a class="open-btn" id="openBtn" href="#" target="_blank">
@@ -216,16 +233,12 @@
 </script>
 <script>
   const PORT = 5007;
-  // Server now uses https.createServer()
-  const SERVER_ORIGIN = `https://127.0.0.1:${PORT}`;
-
   let currentIP = '';
   let currentURL = '';
   let checkInterval = null;
   let autoOpenTimeout = null;
   let autoOpenCancelled = false;
 
-  // ---- Main polling loop ----
   function startChecking() {
     currentIP = '';
     currentURL = '';
@@ -235,78 +248,75 @@
     setStatus('Checking…', 'booting');
     document.getElementById('ipBox').className = 'ip-box booting';
     setIPDisplay('Waiting for server…', 'dim');
+    
+    const manualBox = document.getElementById('manualBox');
+    if (manualBox) manualBox.style.display = 'none';
+    const note = document.getElementById('sslNote');
+    if (note) note.className = 'ssl-note';
+    
     autoOpenCancelled = false;
 
-    check(); // immediate first check
-    checkInterval = setInterval(check, 2500); // retry every 2.5s
+    check();
   }
 
   async function check() {
-    // 0. Direct URL Parameter (Highest Priority)
     const urlParams = new URLSearchParams(window.location.search);
     const paramIp = urlParams.get('ip');
-    if (paramIp && !currentIP) {
+    if (paramIp && paramIp !== '127.0.0.1') {
+      console.log("📍 IP specified in URL param:", paramIp);
+      localStorage.setItem('EquiLib_CachedIP', paramIp);
       onServerReady(paramIp);
       return;
     }
 
-    // 1. Direct Batch Script Injection (Reliable IP injected by Start EquiLib.bat)
-    if (typeof BATCH_IP !== 'undefined' && BATCH_IP && !currentIP) {
+    if (typeof BATCH_IP !== 'undefined' && BATCH_IP && BATCH_IP !== '127.0.0.1') {
+      console.log("📍 IP specified in local_ip.js BATCH_IP:", BATCH_IP);
+      localStorage.setItem('EquiLib_CachedIP', BATCH_IP);
       onServerReady(BATCH_IP);
       return;
     }
 
-    // 2. Query the local server's IP discovery API via HTTPS (succeeds if already trusted)
-    fetch(`${SERVER_ORIGIN}/api/ip`)
-      .then(res => res.json())
-      .then(data => {
+    const cachedIp = localStorage.getItem('EquiLib_CachedIP');
+    if (cachedIp && cachedIp !== '127.0.0.1') {
+      console.log("⚡ Checking last cached IP:", cachedIp);
+      setStatus(`Verifying cached server...`, 'booting');
+      setIPDisplay(cachedIp, 'dim');
+      
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1200);
+      try {
+        const res = await fetch(`https://${cachedIp}:${PORT}/api/ip`, { signal: controller.signal, mode: 'cors' });
+        const data = await res.json();
+        clearTimeout(timeout);
         if (data && data.ip && !currentIP) {
-          console.log("📍 Discovered host LAN IP via local API:", data.ip);
-          onServerReady(data.ip);
+          console.log("🎯 Connected to cached IP successfully:", cachedIp);
+          onServerReady(cachedIp);
+          return;
         }
-      })
-      .catch(() => {
-        // Fast image probe for loopback (bypasses SSL warning barrier via timing)
-        if (!currentIP) {
-          const localStart = Date.now();
-          const localProbe = new Image();
-          localProbe.onload = () => {
-            if (!currentIP) {
-              console.log("🎯 Localhost server discovered via image load.");
-              onServerReady('127.0.0.1');
-            }
-          };
-          localProbe.onerror = () => {
-            const duration = Date.now() - localStart;
-            // SSL handshake rejection fires onerror instantly (<250ms)
-            if (duration < 250 && !currentIP) {
-              console.log(`⚡ Localhost active server detected in ${duration}ms (potential SSL block).`);
-              onServerReady('127.0.0.1');
-            }
-          };
-          localProbe.src = `${SERVER_ORIGIN}/favicon.ico?t=${Date.now()}`;
-        }
-      });
+      } catch (err) {
+        clearTimeout(timeout);
+        console.log("⚠️ Cached IP did not respond or is unauthorized. Proceeding to subnet search...");
+      }
+    }
 
-    // 3. WebRTC Subnet Extraction & Targeted Network Sweeper
-    const ip = await getLocalIPviaWebRTC();
-    if (ip && ip !== '127.0.0.1' && !currentIP) {
-      sweepSubnet(ip);
-    } else if (!currentIP) {
-      // Fallback: Sweep 192.168.1.X range immediately (user's target subnet)
+    const lastManualIp = localStorage.getItem('EquiLib_LastManualIP') || cachedIp || '192.168.1.23';
+    const manualInput = document.getElementById('manualIpInput');
+    if (manualInput && lastManualIp !== '127.0.0.1') {
+      manualInput.value = lastManualIp;
+    }
+
+    setStatus('Detecting local address...', 'booting');
+    const clientIp = await getLocalIPviaWebRTC();
+    if (clientIp && clientIp !== '127.0.0.1') {
+      console.log("📡 WebRTC detected client IP:", clientIp);
+      sweepSubnet(clientIp);
+    } else {
+      console.log("📡 WebRTC blocked/local. Sweeping target 192.168.1.X subnet...");
       sweepSubnet('192.168.1.1');
     }
-    
-    // 4. Force reveal if stuck for 8s
-    setTimeout(() => {
-        if (!currentIP) {
-            document.getElementById('statusText').textContent = "Wait... try manually?";
-            onServerReady('127.0.0.1'); 
-        }
-    }, 8000);
   }
 
-  function sweepSubnet(clientIp) {
+  async function sweepSubnet(clientIp) {
     if (currentIP) return;
     const parts = clientIp.split('.');
     if (parts.length !== 4) return;
@@ -315,88 +325,169 @@
     setStatus('Scanning network...', 'booting');
     setIPDisplay('Scanning...', 'dim');
     
-    // Sweep all 254 IPs on port 5007
+    const candidates = [];
+    const promises = [];
+    
     for (let i = 1; i <= 254; i++) {
-        if (currentIP) break;
-        const testIp = `${base}.${i}`;
-        const startTime = Date.now();
-        const img = new Image();
-        img.onload = () => {
-            if (!currentIP) {
-                console.log(`🎯 Server found via image load on ${testIp}`);
-                onServerReady(testIp);
+      if (currentIP) break;
+      const testIp = `${base}.${i}`;
+      if (testIp.startsWith('127.')) continue;
+      
+      const startTime = Date.now();
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1200);
+      
+      const p = fetch(`https://${testIp}:${PORT}/api/ip`, { signal: controller.signal, mode: 'cors' })
+        .then(res => res.json())
+        .then(data => {
+          clearTimeout(timeout);
+          if (data && data.ip && !currentIP) {
+            console.log(`🎯 Active trusted server found on ${testIp}`);
+            localStorage.setItem('EquiLib_CachedIP', testIp);
+            onServerReady(testIp);
+          }
+        })
+        .catch(err => {
+          clearTimeout(timeout);
+          const duration = Date.now() - startTime;
+          if (duration < 250 && !currentIP) {
+            console.log(`⚡ Potential active server on ${testIp} (error in ${duration}ms)`);
+            if (testIp !== '127.0.0.1' && !candidates.includes(testIp)) {
+              candidates.push(testIp);
+              updateSuggestions(candidates);
             }
-        };
-        img.onerror = () => {
-            const duration = Date.now() - startTime;
-            // If the error fires extremely fast (e.g. < 250ms), the server is active
-            // and immediately rejected the untrusted self-signed certificate.
-            if (duration < 250 && !currentIP) {
-                console.log(`⚡ Fast SSL error response on ${testIp} in ${duration}ms. Locking on!`);
-                onServerReady(testIp);
-            }
-        };
-        img.src = `https://${testIp}:${PORT}/favicon.ico?t=${Date.now()}`;
+          }
+        });
+      promises.push(p);
     }
+    
+    await Promise.allSettled(promises);
+    if (!currentIP) showManualFallback(candidates);
+  }
+
+  function updateSuggestions(candidates) {
+    const list = document.getElementById('recentIpsList');
+    const box = document.getElementById('recentIpsBox');
+    if (!list || !box) return;
+    let filtered = candidates.filter(ip => ip !== '127.0.0.1');
+    if (filtered.length > 1) {
+      filtered.sort((a, b) => {
+        if (a.endsWith('.1')) return 1;
+        if (b.endsWith('.1')) return -1;
+        return 0;
+      });
+    }
+    if (filtered.length === 0) { box.style.display = 'none'; return; }
+    box.style.display = 'flex';
+    list.innerHTML = '';
+    filtered.forEach(ip => {
+      const btn = document.createElement('button');
+      btn.textContent = ip;
+      btn.style.cssText = "background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 4px 10px; font-size: 11px; font-weight: 600; color: #8fd0ff; cursor: pointer; transition: all 0.2s;";
+      btn.onmouseover = () => { btn.style.background = 'rgba(255, 255, 255, 0.15)'; };
+      btn.onmouseout = () => { btn.style.background = 'rgba(255, 255, 255, 0.08)'; };
+      btn.onclick = () => {
+        const input = document.getElementById('manualIpInput');
+        if (input) { input.value = ip; connectManually(ip); }
+      };
+      list.appendChild(btn);
+    });
+  }
+
+  function showManualFallback(candidates) {
+    setLoading(false);
+    setStatus('Connection Needed', 'booting');
+    setIPDisplay('Verification Needed', 'dim');
+    const manualBox = document.getElementById('manualBox');
+    if (manualBox) manualBox.style.display = 'block';
+    updateSuggestions(candidates || []);
+  }
+
+  async function connectManually(ip) {
+    const targetIp = ip || document.getElementById('manualIpInput').value.trim();
+    if (!targetIp) return;
+    const ipPattern = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+    if (!ipPattern.test(targetIp)) {
+      showToast('❌ Invalid IP address format');
+      return;
+    }
+    if (targetIp === '127.0.0.1' || targetIp.startsWith('127.')) {
+      showToast('❌ Loopback IP (127.0.0.1) is not allowed on the online portal.');
+      setLoading(false);
+      setStatus('Connection Needed', 'booting');
+      setIPDisplay('Verification Needed', 'dim');
+      return;
+    }
+    localStorage.setItem('EquiLib_LastManualIP', targetIp);
+    setStatus(`Connecting to ${targetIp}…`, 'booting');
+    setIPDisplay('Connecting…', 'dim');
+    setLoading(true);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    try {
+      const res = await fetch(`https://${targetIp}:${PORT}/api/ip`, { signal: controller.signal, mode: 'cors' });
+      const data = await res.json();
+      clearTimeout(timeout);
+      if (data && data.ip) {
+        localStorage.setItem('EquiLib_CachedIP', targetIp);
+        onServerReady(targetIp);
+        showToast('✅ Connected successfully!');
+      } else { throw new Error('Invalid response'); }
+    } catch(err) {
+      clearTimeout(timeout);
+      setLoading(false);
+      showSslAssistant(targetIp);
+    }
+  }
+
+  function showSslAssistant(ip) {
+    const note = document.getElementById('sslNote');
+    if (note) {
+      note.innerHTML = `
+        <div style="margin-bottom: 8px;">🔒 <strong>SSL Authorization Required:</strong> Since the server uses a secure self-signed certificate, your browser must authorize it once.</div>
+        <div style="display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap;">
+          <a href="https://${ip}:${PORT}/api/ip" target="_blank" style="background: #f59e0b; color: #0b0d19; text-decoration: none; font-weight: 700; padding: 8px 14px; border-radius: 10px; font-size: 11px; display: inline-block; box-shadow: 0 4px 10px rgba(245,158,11,0.3);">
+            👉 Click Here to Authorize Connection
+          </a>
+          <span style="font-size: 10.5px; color: rgba(255,200,50,0.78); line-height: 1.4;">
+            (Click <strong>"Advanced" → "Proceed"</strong> or <strong>"Visit Website"</strong> in the new tab, then return here and click Connect)
+          </span>
+        </div>
+      `;
+      note.className = 'ssl-note show';
+    }
+    setStatus('SSL Authorization Needed', 'booting');
+    setIPDisplay(ip, 'dim');
+    showToast('🔒 Please authorize SSL certificate');
   }
 
   function onServerReady(ip) {
     currentIP = ip;
     currentURL = `https://${ip}:${PORT}`;
-
     setIPDisplay(ip, '');
     document.getElementById('ipBox').className = 'ip-box up';
     setStatus('Online', 'online');
-
     document.getElementById('fullUrl').textContent = currentURL;
     const btn = document.getElementById('openBtn');
     btn.href = currentURL;
     btn.className = 'open-btn active';
     document.getElementById('copyBtn').disabled = false;
-    document.getElementById('sslNote').className = 'ssl-note show';
-
+    const note = document.getElementById('sslNote');
+    if (note) {
+      note.className = 'ssl-note show';
+      note.innerHTML = `
+        ⚠️ <strong>First-time browser warning:</strong> Since the server uses a self-signed certificate, 
+        Chrome/Safari will show a security warning. Click <strong>"Advanced → Proceed to site"</strong> 
+        (Chrome) or <strong>"Visit Website"</strong> (iPhone Safari) to continue.
+      `;
+    }
+    const manualBox = document.getElementById('manualBox');
+    if (manualBox) manualBox.style.display = 'none';
     generateQR(currentURL);
     setLoading(false);
-
-    document.getElementById('timestamp').textContent =
-      `Server ready (Secure) at ${new Date().toLocaleTimeString()}`;
-
-    // Auto-open countdown (Disabled as requested)
+    document.getElementById('timestamp').textContent = `Server ready (Secure) at ${new Date().toLocaleTimeString()}`;
   }
 
-  // ---- Auto-open countdown ----
-  function startCountdown(seconds, url) {
-    const bar = document.getElementById('countdownBar');
-    const text = document.getElementById('countdownText');
-    const fill = document.getElementById('progressFill');
-    bar.className = 'countdown-bar show';
-    fill.style.width = '100%';
-
-    let remaining = seconds;
-    text.textContent = `Opening EquiLib in ${remaining}s…`;
-
-    const tick = setInterval(() => {
-      remaining--;
-      fill.style.width = `${(remaining / seconds) * 100}%`;
-      if (remaining <= 0) {
-        clearInterval(tick);
-        bar.className = 'countdown-bar';
-        if (!autoOpenCancelled) window.location.href = url;
-      } else {
-        text.textContent = `Opening EquiLib in ${remaining}s…`;
-      }
-    }, 1000);
-
-    autoOpenTimeout = tick;
-  }
-
-  function cancelAutoOpen() {
-    autoOpenCancelled = true;
-    clearInterval(autoOpenTimeout);
-    document.getElementById('countdownBar').className = 'countdown-bar';
-  }
-
-  // ---- Helpers ----
   function getLocalIPviaWebRTC() {
     return new Promise((resolve) => {
       const pc = new RTCPeerConnection({ iceServers: [] });
@@ -455,7 +546,6 @@
     setTimeout(() => t.classList.remove('show'), 2000);
   }
 
-  // Start polling immediately on load
   window.addEventListener('load', startChecking);
 </script>
 </body>
