@@ -1781,7 +1781,7 @@
             };
 
             const handleExportDB = () => {
-                window.location.href = '/api/db/export';
+                window.location.href = `${API_BASE}/db/export`;
             };
 
             const handleImportDB = (e) => {
@@ -1792,7 +1792,7 @@
                     const formData = new FormData();
                     formData.append('database', file);
 
-                    fetch('/api/db/import', {
+                    fetch(`${API_BASE}/db/import`, {
                         method: 'POST',
                         body: formData
                     })
