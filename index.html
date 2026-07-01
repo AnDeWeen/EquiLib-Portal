@@ -44,8 +44,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Equilibr">
     <link rel="apple-touch-icon" href="https://ui-avatars.com/api/?name=EquiLib&background=f59e0b&color=000&size=192">
-    <!-- Tailwind CSS (Local) -->
-    <script src="/tailwind.js"></script>
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -188,12 +188,12 @@
     <!-- Custom Styles -->
     <link rel="stylesheet" href="style.css">
 
-    <!-- Local Libraries for Offline/iPhone use -->
-    <script src="/react.production.min.js"></script>
-    <script src="/react-dom.production.min.js"></script>
-    <script src="/babel.min.js"></script>
-    <script src="/html5-qrcode.min.js"></script>
-    <script src="/lucide.min.js"></script>
+    <!-- React & Libraries (CDN) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" crossorigin></script>
+    <script src="https://unpkg.com/lucide@latest" crossorigin></script>
 
     <!-- Database Services Pointed to Local Python API -->
     <script>
