@@ -925,6 +925,7 @@
             const [isReturnCartOpen, setIsReturnCartOpen] = useState(false);
             const [borrowCart, setBorrowCart] = useState([]);
             const [isBorrowCartOpen, setIsBorrowCartOpen] = useState(false);
+            const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
 
             // Drag and Drop State
             const [draggedItem, setDraggedItem] = useState(null);
@@ -2482,6 +2483,11 @@
                                 {/* Mobile Logout */}
                                 <button onClick={handleLogout} className="md:hidden shrink-0 text-slate-400 hover:text-red-400 p-2 rounded-lg border border-slate-700 bg-slate-900">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                                </button>
+
+                                {/* About Button */}
+                                <button onClick={() => setIsAboutModalOpen(true)} className="shrink-0 text-slate-400 hover:text-blue-400 p-2 rounded-lg border border-slate-700 bg-slate-900 ml-1 md:ml-2" title="App Information">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                                 </button>
 
                                 {/* Desktop Scan */}
