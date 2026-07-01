@@ -3297,31 +3297,31 @@
                     {
                         selectedItem && !isScanSheetOpen && (
                             <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onMouseDown={(e) => { if (e.target === e.currentTarget) setSelectedItem(null) }}>
-                                <div className="bg-slate-800 border border-slate-600 rounded-2xl p-0 w-full max-w-lg shadow-2xl relative max-h-[85vh] sm:max-h-[90vh] overflow-y-auto" onMouseDown={e => e.stopPropagation()}>
+                                <div className="bg-slate-800 border border-slate-600 rounded-2xl p-0 w-full max-w-lg shadow-2xl relative max-h-[75vh] flex flex-col overflow-hidden" onMouseDown={e => e.stopPropagation()}>
                                     {/* Header Image/Pattern Placeholder */}
-                                    <div className="h-32 bg-slate-700 border-b border-slate-600 flex items-center justify-center relative bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjMWUyOTNiIi8+CjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiMzMzQxNTUiLz4KPC9zdmc+')]">
-                                        <div className="p-4 bg-slate-900 rounded-xl border border-slate-600 shadow-xl absolute -bottom-8">
+                                    <div className="shrink-0 h-32 bg-slate-700 border-b border-slate-600 flex items-center justify-center relative bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjMWUyOTNiIi8+CjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiMzMzQxNTUiLz4KPC9zdmc+')]">
+                                        <div className="p-4 bg-slate-900 rounded-xl border border-slate-600 shadow-xl absolute -bottom-8 z-20">
                                             <Icons.Package />
+                                        </div>
+                                        
+                                        <div className="absolute top-4 right-4 flex gap-2 z-30">
+                                            {currentUser?.role === 'Admin' && (
+                                                <>
+                                                    <button onClick={(e) => handleEditClick(e, selectedItem)} className="text-slate-400 hover:text-blue-400 bg-slate-900/50 p-2 rounded-full backdrop-blur transition-colors" title={t.editItemBtn}>
+                                                        <Icons.Edit />
+                                                    </button>
+                                                    <button onClick={(e) => handleDeleteItem(e, selectedItem)} className="text-slate-400 hover:text-red-400 bg-slate-900/50 p-2 rounded-full backdrop-blur transition-colors" title={t.deleteItemBtn}>
+                                                        <Icons.Trash2 />
+                                                    </button>
+                                                </>
+                                            )}
+                                            <button onClick={() => setSelectedItem(null)} className="text-slate-400 hover:text-white bg-slate-900/50 p-2 rounded-full backdrop-blur transition-colors border border-slate-600/30">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                            </button>
                                         </div>
                                     </div>
 
-                                    <div className="absolute top-4 right-4 flex gap-2 z-10">
-                                        {currentUser?.role === 'Admin' && (
-                                            <>
-                                                <button onClick={(e) => handleEditClick(e, selectedItem)} className="text-slate-400 hover:text-blue-400 bg-slate-900/50 p-2 rounded-full backdrop-blur transition-colors" title={t.editItemBtn}>
-                                                    <Icons.Edit />
-                                                </button>
-                                                <button onClick={(e) => handleDeleteItem(e, selectedItem)} className="text-slate-400 hover:text-red-400 bg-slate-900/50 p-2 rounded-full backdrop-blur transition-colors" title={t.deleteItemBtn}>
-                                                    <Icons.Trash2 />
-                                                </button>
-                                            </>
-                                        )}
-                                        <button onClick={() => setSelectedItem(null)} className="text-slate-400 hover:text-white bg-slate-900/50 p-2 rounded-full backdrop-blur transition-colors border border-slate-600/30">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                        </button>
-                                    </div>
-
-                                    <div className="pt-12 p-8">
+                                    <div className="flex-1 overflow-y-auto pt-12 p-8 pb-12">
                                         <div className="text-center mb-6">
                                             <h3 className="text-3xl font-bold text-white mb-2">{lang === 'en' && selectedItem.NameEn ? selectedItem.NameEn : selectedItem.Name}</h3>
                                             <div className="flex justify-center gap-2">
