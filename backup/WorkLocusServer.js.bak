@@ -1,0 +1,239 @@
+const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
+const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
+const https = require('https');
+
+const app = express();
+const PORT = 5007; 
+
+const physicalDir = process.pkg ? path.dirname(process.execPath) : process.cwd();
+const DATA_DIR = path.join(physicalDir, 'data');
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+const DB_FILE = path.join(DATA_DIR, 'database.sqlite');
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static(physicalDir));
+
+function initDB() {
+    try {
+        const DB_BACKUP_DIR = path.join(physicalDir, 'backups');
+        if (!fs.existsSync(DB_BACKUP_DIR)) { fs.mkdirSync(DB_BACKUP_DIR); }
+        const todayFile = `database_backup_${new Date().toISOString().split('T')[0]}.sqlite`;
+        const backupPath = path.join(DB_BACKUP_DIR, todayFile);
+        if (fs.existsSync(DB_FILE) && !fs.existsSync(backupPath)) {
+            fs.copyFileSync(DB_FILE, backupPath);
+            console.log('[BACKUP] Daily database backup created: ' + todayFile);
+        }
+    } catch (e) {
+        console.error('[BACKUP ERROR] ' + e.message);
+    }
+
+    const db = new sqlite3.Database(DB_FILE);
+    db.serialize(() => {
+        db.run(`CREATE TABLE IF NOT EXISTS Items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Barcode TEXT UNIQUE,
+            Name TEXT,
+            NameEn TEXT,
+            Description TEXT,
+            Category TEXT,
+            CategoryEn TEXT,
+            TotalQuantity INTEGER DEFAULT 0,
+            BorrowedQuantity INTEGER DEFAULT 0,
+            BrokenQuantity INTEGER DEFAULT 0,
+            LocationID INTEGER,
+            PriceVND INTEGER DEFAULT 0,
+            LastUpdated TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(LocationID) REFERENCES Locations(id)
+        )`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS Locations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ShelfLabel TEXT UNIQUE,
+            ShelfLabelEn TEXT,
+            RoomNumber TEXT
+        )`);
+
+        // Database Migration: Add Tester columns to Items if missing
+        const alterTableQueries = [
+            "ALTER TABLE Items ADD COLUMN TesterName TEXT",
+            "ALTER TABLE Items ADD COLUMN TesterID TEXT",
+            "ALTER TABLE Items ADD COLUMN CustomTesterName TEXT"
+        ];
+
+        alterTableQueries.forEach(query => {
+            db.run(query, (err) => {
+                // Ignore error if column already exists
+                if (err && !err.message.includes("duplicate column name")) {
+                    console.error("[DB MIGRATION ERROR]", err.message);
+                }
+            });
+        });
+
+        db.run(`CREATE TABLE IF NOT EXISTS Transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            part_id INTEGER,
+            user_name TEXT,
+            action TEXT,
+            timestamp TEXT
+        )`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS AppUsers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            role TEXT,
+            pass_code TEXT
+        )`);
+
+        db.get("SELECT COUNT(*) as count FROM AppUsers", (err, row) => {
+            if (row && row.count === 0) {
+                const stmt = db.prepare("INSERT INTO AppUsers (id, username, role, pass_code) VALUES (?, ?, ?, ?)");
+                const initialUsers = [[1, 'An', 'Admin', 'EquiLib@2026'], [2, 'Binh', 'User', 'EquiLib@2026']];
+                initialUsers.forEach(u => stmt.run(u));
+                stmt.finalize();
+            }
+        });
+    });
+    return db;
+}
+
+const db = initDB();
+
+const queryAll = (sql, params = []) => {
+    return new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+        });
+    });
+};
+
+app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'index.html')); });
+
+app.get('/api/items', async (req, res) => {
+    try { const rows = await queryAll('SELECT * FROM Items'); res.json({ data: rows }); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/items', (req, res) => {
+    const item = req.body;
+    db.run(
+        `INSERT INTO Items (Barcode, Name, NameEn, Description, Category, CategoryEn, TotalQuantity, BorrowedQuantity, BrokenQuantity, LocationID, PriceVND, LastUpdated, TesterName, TesterID, CustomTesterName) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)`,
+        [item.Barcode, item.Name, item.NameEn, item.Description, item.Category, item.CategoryEn, item.TotalQuantity, item.BorrowedQuantity || 0, item.BrokenQuantity || 0, item.LocationID, item.PriceVND || 0, item.TesterName || null, item.TesterID || null, item.CustomTesterName || null],
+        function (err) {
+            if (err) { res.status(500).json({ error: err.message }); return; }
+            db.get('SELECT * FROM Items WHERE id = ?', [this.lastID], (fetchErr, row) => {
+                if (fetchErr) res.status(500).json({ error: fetchErr.message });
+                else res.status(201).json({ data: row, message: 'Item created successfully' });
+            });
+        }
+    );
+});
+
+app.put('/api/items/:id', (req, res) => {
+    const itemId = req.params.id;
+    const item = req.body;
+    db.get('SELECT * FROM Items WHERE id = ?', [itemId], (fetchErr, row) => {
+        if (fetchErr || !row) return res.status(404).json({ error: 'Item not found' });
+        const merged = { ...row, ...item };
+        db.run(
+            `UPDATE Items SET Barcode=?, Name=?, NameEn=?, Description=?, Category=?, CategoryEn=?, TotalQuantity=?, BorrowedQuantity=?, BrokenQuantity=?, LocationID=?, PriceVND=?, LastUpdated=CURRENT_TIMESTAMP, TesterName=?, TesterID=?, CustomTesterName=? WHERE id=?`,
+            [merged.Barcode, merged.Name, merged.NameEn, merged.Description, merged.Category, merged.CategoryEn, merged.TotalQuantity, merged.BorrowedQuantity || 0, merged.BrokenQuantity || 0, merged.LocationID, merged.PriceVND || 0, merged.TesterName || null, merged.TesterID || null, merged.CustomTesterName || null, itemId],
+            (err) => {
+                if (err) res.status(500).json({ error: err.message });
+                else db.get('SELECT * FROM Items WHERE id = ?', [itemId], (fErr, updated) => res.json({ data: updated }));
+            }
+        );
+    });
+});
+
+app.delete('/api/items/:id', (req, res) => {
+    db.run('DELETE FROM Items WHERE id = ?', [req.params.id], (err) => {
+        if (err) res.status(500).json({ error: err.message });
+        else res.json({ message: 'Deleted' });
+    });
+});
+
+app.get('/api/locations', async (req, res) => {
+    try { const rows = await queryAll('SELECT * FROM Locations'); res.json({ data: rows }); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/users', async (req, res) => {
+    try { const rows = await queryAll('SELECT * FROM AppUsers'); res.json({ data: rows }); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/users', (req, res) => {
+    const user = req.body;
+    db.run('INSERT INTO AppUsers (username, role, pass_code) VALUES (?, ?, ?)', [user.username, user.role, user.pass_code], function (err) {
+        if (err) res.status(500).json({ error: err.message });
+        else res.status(201).json({ id: this.lastID });
+    });
+});
+
+app.put('/api/users/:id', (req, res) => {
+    const userId = req.params.id;
+    const user = req.body;
+    db.run(
+        'UPDATE AppUsers SET username=?, role=?, pass_code=? WHERE id=?',
+        [user.username, user.role, user.pass_code, userId],
+        function (err) {
+            if (err) res.status(500).json({ error: err.message });
+            else res.json({ message: 'User updated successfully' });
+        }
+    );
+});
+
+app.delete('/api/users/:id', (req, res) => {
+    db.run('DELETE FROM AppUsers WHERE id = ?', [req.params.id], (err) => {
+        if (err) res.status(500).json({ error: err.message });
+        else res.json({ message: 'User deleted successfully' });
+    });
+});
+
+app.get('/api/transactions', async (req, res) => {
+    try { const rows = await queryAll('SELECT * FROM Transactions ORDER BY timestamp DESC'); res.json({ data: rows }); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/transactions', (req, res) => {
+    const tx = req.body;
+    db.run(
+        'INSERT INTO Transactions (part_id, user_name, action, timestamp) VALUES (?, ?, ?, ?)',
+        [tx.part_id, tx.user_name, tx.action, tx.timestamp || new Date().toISOString()],
+        function (err) {
+            if (err) res.status(500).json({ error: err.message });
+            else res.status(201).json({ id: this.lastID });
+        }
+    );
+});
+
+const options = {
+    key: fs.readFileSync(path.join(physicalDir, 'key.pem')),
+    cert: fs.readFileSync(path.join(physicalDir, 'cert.pem'))
+};
+
+const getLocalIp = () => {
+    const interfaces = require('os').networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+        }
+    }
+    return '127.0.0.1';
+}
+
+app.get('/api/ip', (req, res) => {
+    res.json({ ip: getLocalIp() });
+});
+
+https.createServer(options, app).listen(PORT, '0.0.0.0', () => {
+    console.log(`[SERVER] running securely on https://${getLocalIp()}:${PORT}`);
+});
